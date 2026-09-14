@@ -1,217 +1,106 @@
 # FIAP Bank - Emulador de Caixa Eletrônico (ATM)
 
-![Java 21](https://img.shields.io/badge/Java-21-orange?style=for-the-badge&logo=java)
-![Maven](https://img.shields.io/badge/Maven-3.x-blue?style=for-the-badge&logo=apache-maven)
-![FlatLaf](https://img.shields.io/badge/UI-FlatLaf_Dark-darkgreen?style=for-the-badge)
-![Architecture](https://img.shields.io/badge/Architecture-Domain--Driven_Design_(DDD)-purple?style=for-the-badge)
+Checkpoint 4 - Engenharia de Software / Domain Driven Design - Java (FIAP, 2026)
 
-> **FIAP - Engenharia de Software (2026)**  
-> **Checkpoint 4 (CP4)** — Aplicação de Emulação de Caixa Eletrônico (ATM) construída em **Java 21**, **Swing (FlatLaf)** e orientada aos princípios de **Domain-Driven Design (DDD)**.
+Refactoring do emulador de ATM original (Java Swing) para uma arquitetura em camadas, com
+persistência em SQLite via JDBC, DTOs (Records) na fronteira da aplicação, repositório genérico
+com Optional e uso de Streams no lugar de laços imperativos.
 
----
+## Autor
 
-## 📌 Visão Geral
+Trabalho individual.
 
-O **FIAP Bank ATM** é um emulador interativo de Caixa Eletrônico de alta fidelidade visual e comportamental. Desenvolvido para simular a experiência real de operação de um terminal bancário autoatendimento, o sistema oferece desde a validação de segurança de cartões/PIN até a dispensação simulada de cédulas e impressão de extrato térmico em popup.
+Nicolas Santana Gará - RM561461
 
-A aplicação foi projetada com arquitetura limpa em camadas baseada em **DDD (Domain-Driven Design)**, garantindo desacoplamento entre regras de negócio, persistência de dados e a camada de apresentação visual.
+## Visão geral
 
----
+O frontend em Java Swing não foi alterado (nem layout, nem fluxo de telas). O que mudou foi o
+motor por trás dele: o projeto era um monólito com tudo no mesmo pacote e persistência em memória
+(perdia tudo ao reiniciar). Agora o código está dividido fisicamente em 4 módulos Maven e os dados
+ficam salvos de verdade em um banco SQLite.
 
-## 🎯 Principais Funcionalidades
-
-- **🔐 Autenticação Segura & Gestão de PIN**:
-  - Leitura e validação de conta bancária e senha numérica de 4 dígitos.
-  - Bloqueio automático de segurança da conta após **3 tentativas incorretas consecutivas**.
-  - Reset de tentativas falhas ao autenticar com sucesso.
-- **💵 Saque Eletrônico (Withdrawal)**:
-  - Valores rápidos pré-definidos via botões físicos laterais (R\$ 20, R\$ 50, R\$ 100, R\$ 200, R\$ 500) e opção de valor personalizado.
-  - Validação estrita de saldo disponível (`InsufficientFundsException`).
-  - Controle e validação de **limite diário de saque** (`DailyLimitExceededException`).
-  - Animação visual no compartimento de notas (efeito luminoso verde e alerta de retirada de cédulas).
-- **📥 Depósito em Dinheiro (Deposit)**:
-  - Entrada de valores numéricos via teclado.
-  - Validação de valor mínimo positivo.
-  - Animação visual de processamento de depósitos e envelopes.
-- **💸 Transferência entre Contas (Transfer)**:
-  - Transferência em tempo real para qualquer outra conta existente no sistema.
-  - Validação da existência da conta de destino e verificação de conta bloqueada.
-  - Proibição de transferências para a própria conta de origem.
-  - Lançamento automático de movimentação de saída (`TRANSFER_OUT`) e entrada (`TRANSFER_IN`).
-- **📊 Consulta de Saldo e Limite Diário**:
-  - Exibição de saldo em moeda nacional formatada (`R$ X.XXX,XX`).
-  - Exibição em tempo real do limite diário de saque restante.
-- **🧾 Impressão de Extrato Térmico Virtual**:
-  - Simulação de impressora lateral com aviso luminoso.
-  - Emissão de extrato em janela pop-up estilizada como papel térmico (fonte monospaced), contendo as últimas transações e botão de destacar comprovante.
-- **⌨️ Dupla Forma de Interação (Teclado Físico + Botões Virtuais)**:
-  - Interface com botões laterais (L1, L2, L3 e R1, R2, R3) e teclado numérico virtual.
-  - Suporte completo ao **teclado do computador** via interceptação global de eventos (`0-9`, `Enter` para confirmar, `Backspace` / `Esc` para apagar ou cancelar).
-- **💡 Indicadores de Periféricos & LED Animated States**:
-  - LED indicador de leitor de cartão piscando no estado de boas-vindas.
-  - Slots de dispensador de dinheiro e impressora com feedback de cor e estado.
-
----
-
-## 🏗️ Arquitetura do Sistema (DDD)
-
-A aplicação segue uma divisão clara de responsabilidades estruturada nos padrões do **Domain-Driven Design (DDD)**:
+## Estrutura dos módulos
 
 ```
-com.fiap.bank.atm
-├── domain                          # Camada de Domínio (Regras de Negócio Puras)
-│   ├── exception                   # Exceções de negócio customizadas
-│   │   ├── AccountBlockedException.java
-│   │   ├── DailyLimitExceededException.java
-│   │   ├── InsufficientFundsException.java
-│   │   └── InvalidPinException.java
-│   ├── model                       # Entidades e Objetos de Valor (Value Objects)
-│   │   ├── Account.java            # Entidade Principal da Conta Bancária
-│   │   ├── BaseEntity.java         # Classe base com ID (UUID) e datas de criação/atualização
-│   │   ├── Money.java              # Value Object imutável para operações monetárias (BigDecimal)
-│   │   ├── Transaction.java        # Entidade de Registro de Transações
-│   │   └── TransactionType.java    # Enum dos tipos de transação (Saque, Depósito, Transferências)
-│   └── repository                  # Interfaces de Repositório
-│       └── AccountRepository.java
-│
-├── application                     # Camada de Aplicação (Casos de Uso & Orquestração)
-│   └── service
-│       └── AtmService.java         # Orquestra autenticação, transações e estado da sessão
-│
-├── infrastructure                  # Camada de Infraestrutura (Persistência e Recursos Externos)
-│   └── persistence
-│       └── InMemoryAccountRepository.java # Implementação em memória com dados de teste (Seed)
-│
-└── presentation                    # Camada de Apresentação (UI / Swing)
-    ├── AtmFrame.java               # Janela principal do ATM com FlatLaf Dark Theme
-    ├── AtmFrame.form               # Arquivo de layout visual do Swing Form
-    └── ScreenState.java            # Enum da Máquina de Estados da Tela
+fiap-bank-atm/            (pom agregador, packaging=pom)
+  domain/                 regras de negócio (Account, Money, Transaction, exceções, repositórios)
+  application/            AtmService + DTOs (AccountInfoDTO, TransactionDTO)
+  infrastructure/         persistência JDBC/SQLite + classe main
+  presentation/           Swing (AtmFrame, ScreenState) - só depende de application
 ```
 
----
+Dependências entre módulos:
 
-## ⚙️ Detalhamento dos Componentes de Domínio
-
-### 1. `Money` (Value Object)
-- Classe imutável responsável por manipular valores monetários garantindo precisão decimal com `BigDecimal` (escala 2).
-- Evita erros de arredondamento de ponto flutuante (`double`).
-- Formatação automática no padrão brasileiro `pt-BR` (ex: `R$ 5.000,00`).
-- Métodos utilitários de comparação (`isGreaterThan`, `isLessThan`, `isGreaterThanOrEqual`) e aritmética (`plus`, `minus`).
-
-### 2. `Account` (Aggregate Root / Entity)
-- Contém o número da conta, PIN criptografado/armazenado, saldo (`Money`), limite diário de saque, total sacado no dia, status de bloqueio, contador de falhas de autenticação e histórico de transações.
-- Encapsula todas as regras de negócio de saque, depósito, transferência e autenticação.
-
-### 3. `AtmService` (Application Service)
-- Atua como a fachada da camada de aplicação.
-- Gerencia o estado da conta atualmente autenticada (`currentAccount`).
-- Garante a execução transacional salvando alterações no `AccountRepository`.
-
-### 4. `ScreenState` & `AtmFrame` (Máquina de Estados de Tela)
-A interface gráfica opera sobre uma **Máquina de Estados Finitos (FSM)** representada pelo enum `ScreenState`:
-
-| Estado (`ScreenState`) | Descrição |
-| :--- | :--- |
-| `WELCOME` | Tela inicial aguardando a digitação do número da conta. LED do cartão pisca verde. |
-| `ENTER_PIN` | Solicitação da senha de 4 dígitos (exibida com asteriscos `****`). |
-| `MAIN_MENU` | Menu principal com opções operacionais associadas aos botões laterais. |
-| `WITHDRAW_SELECT` | Seleção de valores pré-definidos de saque (R\$ 20 a R\$ 500) ou valor customizado. |
-| `WITHDRAW_CUSTOM` | Campo para digitação de valor específico de saque. |
-| `DEPOSIT_INPUT` | Campo para digitação de valor de depósito em dinheiro. |
-| `TRANSFER_ACCOUNT` | Entrada do número da conta de destino para transferência. |
-| `TRANSFER_VALUE` | Entrada do valor da transferência. |
-| `SHOW_BALANCE` | Exibição do saldo disponível e limite diário restante. |
-| `SHOW_STATEMENT` | Disparo da impressão do extrato. |
-| `ANIMATION_*` | Estados temporários de animação (dispensador de cédulas, impressora e depósito). |
-| `SUCCESS` / `ERROR` | Mensagens de confirmação de sucesso ou erros tratados do sistema. |
-
----
-
-## 🔑 Contas Pré-cadastradas para Teste (Seed Data)
-
-Ao iniciar a aplicação, as seguintes contas de teste são carregadas automaticamente em memória pelo `InMemoryAccountRepository`:
-
-| Número da Conta | PIN (Senha) | Saldo Inicial | Limite Diário Saque | Histórico Inicial |
-| :---: | :---: | :---: | :---: | :--- |
-| **`12345`** | `1234` | **R\$ 5.000,00** | R\$ 1.500,00 | Depósito R\$ 2.000, Transf. Recebida R\$ 500, Saque R\$ 100 |
-| **`67890`** | `5678` | **R\$ 1.200,00** | R\$ 1.000,00 | Depósito R\$ 1.500, Transf. Enviada R\$ 500 |
-| **`99999`** | `9999` | **R\$ 50,00** | R\$ 500,00 | Depósito R\$ 50,00 (Abertura de conta) |
-
----
-
-## 🛠️ Tecnologias e Bibliotecas Utilizadas
-
-- **Java 21**: Linguagem principal de programação (LTS).
-- **Swing (Java GUI)**: Framework nativo de interface gráfica.
-- **FlatLaf 3.5.1 (`com.formdev:flatlaf`)**: Look & Feel moderno e escuro para interfaces Swing.
-- **JUnit 5 (5.10.2)**: Framework de testes unitários.
-- **Apache Maven**: Gerenciamento de dependências e build.
-
----
-
-## 🚀 Como Executar o Projeto
-
-### Pré-requisitos
-- **JDK 21** ou superior instalado e configurado nas variáveis de ambiente (`JAVA_HOME`).
-- **Apache Maven 3.8+** instalado (ou via integração da IDE NetBeans / IntelliJ / Eclipse / VS Code).
-
----
-
-### Opção 1: Linha de Comando (Terminal / Prompt)
-
-1. Clone o repositório ou navegue até a pasta raiz do projeto:
-   ```bash
-   cd fiap-bank-atm
-   ```
-
-2. Compile e execute a aplicação via Maven:
-   ```bash
-   mvn clean compile exec:java
-   ```
-
----
-
-### Opção 2: Executar via Script Batch (Windows)
-
-No Windows, você pode executar diretamente o script configurado `run.bat`:
-```cmd
-run.bat
 ```
-*O script localiza automaticamente o Maven do Apache NetBeans ou o `mvn` global e inicializa a aplicação.*
+presentation -> application -> domain
+infrastructure -> domain, application, presentation
+```
 
----
+O `pom.xml` de `presentation` não tem nenhuma dependência pra `domain` nem `infrastructure`, só
+pra `application`. A classe com o `main()` ficou em `infrastructure` porque é o único módulo que
+pode enxergar todo mundo ao mesmo tempo (precisa montar o repositório JDBC e abrir a tela Swing).
 
-### Opção 3: Apache NetBeans / IntelliJ IDEA / Eclipse
+## Decisões de implementação
 
-1. Abra a IDE e selecione **Open Project** apontando para a pasta raiz do projeto (onde se encontra o `pom.xml`).
-2. Aguarde a sincronização das dependências Maven (`flatlaf`, `junit-jupiter`).
-3. Localize e execute a classe principal:  
-   [AtmApplication.java](file:///Users/eduardo.ramos/workspace/fiap/engenharia-de-software/2026/fiap-bank-atm/CP4/fiap-bank-atm/src/main/java/com/fiap/bank/atm/AtmApplication.java) (`com.fiap.bank.atm.AtmApplication`).
+- `AtmService` não recebe nem devolve `Account`/`Transaction`/`Money`. Só trafega `AccountInfoDTO`,
+  `TransactionDTO`, `UUID`, `BigDecimal` e tipos primitivos.
+- As exceções de negócio (`AccountBlockedException`, `InvalidPinException`, etc.) existem tanto em
+  `domain.exception` quanto em `application.exception`. O `AtmService` pega a do domain e relança a
+  de application, porque a presentation não pode importar nada do domain.
+- `ATMRepository<T extends BaseEntity>` é a interface genérica com `buscarPorId`, `salvar`,
+  `remover` e `buscarTodos`, todos usando `Optional` onde faz sentido. `AccountRepository` estende
+  essa interface e adiciona `findByAccountNumber`.
+- `AccountRepositoryJdbcImpl` usa só `PreparedStatement`/`ResultSet`, sem concatenar SQL em lugar
+  nenhum.
+- Como o construtor de `Account` valida regras de negócio, criei um `Account.reconstruct(...)`
+  separado só pra remontar a conta com os dados que já vêm do banco (sem passar pelas validações de
+  novo).
 
----
+## Contas de teste
 
-## 🧪 Rodando os Testes
+Carregadas automaticamente no banco (`fiapbank.db`) na primeira execução:
 
-Para executar a suíte de testes unitários com o Maven Surefire Plugin:
+| Conta | PIN | Saldo inicial | Limite diário |
+|---|---|---|---|
+| 12345 | 1234 | R$ 5.000,00 | R$ 1.500,00 |
+| 67890 | 5678 | R$ 1.200,00 | R$ 1.000,00 |
+| 99999 | 9999 | R$ 50,00 | R$ 500,00 |
+
+Diferente da versão original, esses dados continuam lá mesmo depois de fechar e abrir o programa
+de novo.
+
+## Tecnologias
+
+- Java 21
+- Swing + FlatLaf (UI, sem alteração)
+- JDBC + SQLite (org.xerial:sqlite-jdbc), sem ORM
+- JUnit 5 (testes do módulo domain)
+- Maven multi-módulo
+
+## Como rodar
+
+Pré-requisito: JDK 21+ e Maven 3.8+.
+
+```bash
+mvn clean install
+mvn -pl infrastructure exec:java
+```
+
+No Windows também dá pra usar o `run.bat`.
+
+Pela IDE: abrir a pasta raiz como projeto Maven multi-módulo e rodar a classe
+`com.fiap.bank.atm.infrastructure.AtmApplication`.
+
+## Testes
+
 ```bash
 mvn test
 ```
 
----
+Cobrem as regras do `Account`: autenticação, bloqueio após 3 tentativas erradas, saque, limite
+diário, depósito, transferência e a reconstrução via `reconstruct`.
 
-## 🎨 Destaques de Design e Usabilidade
+## Créditos
 
-- **Tema Escuro de Alta Performance (Slate & Neon)**: Tela em estilo monitor bancário CRT/LCD moderno com texto ciano/amarelo para facilitar a leitura.
-- **Teclado Numérico & Teclas de Atalho**:
-  - Tecla `1` a `0`: Digitação de valores e PIN.
-  - Tecla `Confirmar` / `Enter`: Submete a ação atual.
-  - Tecla `C` (Vermelha) / `Backspace` / `Esc`: Limpa a digitação ou cancela/volta de tela.
-- **Janela de Extrato Destacável**:
-  - Ao solicitar o extrato no menu principal, um diálogo em formato de **comprovante impresso térmico** é aberto ao lado do terminal com as movimentações recentes e saldo atualizado.
-
----
-
-## 📝 Licença e Créditos
-
-Desenvolvido para fins acadêmicos como parte do curso de **Engenharia de Software (2026)** da **FIAP**.  
+Trabalho acadêmico - Checkpoint 4, Domain Driven Design - Java, FIAP, 2026.
 Prof. Eduardo Ramos.
